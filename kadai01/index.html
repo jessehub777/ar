@@ -32,25 +32,9 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
   }
 
-  #title {
-    font-size: 14px;
-    font-weight: bold;
-    margin-bottom: 8px;
-  }
-
-  #msg {
-    font-size: 12px;
-    line-height: 1.5;
-    color: #555;
-    margin-bottom: 10px;
-    min-height: 34px;
-  }
-
-  #count {
-    font-size: 12px;
-    color: #666;
-    margin-bottom: 10px;
-  }
+  #title { font-size: 14px; font-weight: bold; margin-bottom: 8px; }
+  #msg { font-size: 12px; line-height: 1.5; color: #555; margin-bottom: 10px; min-height: 34px; }
+  #count { font-size: 12px; color: #666; margin-bottom: 10px; }
 
   button {
     width: 100%;
@@ -65,13 +49,8 @@
     cursor: pointer;
   }
 
-  button:active {
-    background: #3a66ad;
-  }
-
-  #resetBtn {
-    background: #8a8a8a;
-  }
+  button:active { background: #3a66ad; }
+  #resetBtn { background: #8a8a8a; }
 </style>
 </head>
 <body>
@@ -86,9 +65,9 @@
 
 <a-scene>
 
-  <!-- 床 -->
+  <!-- 床（テクスチャは起動時に貼る） -->
   <a-box id="floor" width="14" height="0.4" depth="14" position="0 -0.2 0"
-         material="color: #b99a72" static-body></a-box>
+         material="color: #ffffff; repeat: 14 14" static-body></a-box>
 
   <!-- 壁（奥と左） -->
   <a-box width="14" height="4" depth="0.2" position="0 2 -7"
@@ -110,7 +89,7 @@
          material="color: #8a5f31" static-body></a-box>
 
   <!-- 机の上の物 -->
-  <a-sphere id="apple" position="-0.7 0.95 0.1" radius="0.18"
+  <a-sphere id="apple" class="clickable" position="-0.7 0.95 0.1" radius="0.18"
             material="color: #d64545"></a-sphere>
 
   <a-box position="-0.05 0.89 0.05" width="0.34" height="0.32" depth="0.34"
@@ -126,67 +105,40 @@
   <a-entity light="type: ambient; intensity: 0.75"></a-entity>
   <a-entity light="type: directional; position: 3 6 4; intensity: 0.65"></a-entity>
 
-  <a-entity camera position="0 1.35 3.4" rotation="-13 0 0"></a-entity>
+  <!-- カメラ。cursor を付けるとマウスのクリックを3Dオブジェクトで受け取れる -->
+  <a-entity camera position="0 1.2 2.9" rotation="-14 0 0">
+    <a-entity cursor="rayOrigin: mouse" raycaster="objects: .clickable"></a-entity>
+  </a-entity>
 
 </a-scene>
 
 <script>
-/* ===========================================================================
+/* ---------------------------------------------------------------------------
    【外部コード】
-   床のテクスチャを Canvas で描画している部分。
+   床の木目テクスチャを Canvas で描いている部分。
    授業では画像ファイルを読み込む方法しか扱っていないため、
-   Canvas に木目の線を描く処理は AI のサポートで実装した。
-   =========================================================================== */
+   Canvas にしま模様を描く処理は AI のサポートで実装した。
+   --------------------------------------------------------------------------- */
 function makeWoodTexture() {
   const cv = document.createElement('canvas');
-  cv.width = 512;
-  cv.height = 512;
+  cv.width = 64;
+  cv.height = 64;
   const g = cv.getContext('2d');
 
-  g.fillStyle = '#d8c3a0';
-  g.fillRect(0, 0, 512, 512);
+  g.fillStyle = '#d9c2a0';      // 明るい板
+  g.fillRect(0, 0, 64, 64);
+  g.fillStyle = '#c6ab84';      // 暗い板
+  g.fillRect(0, 0, 64, 20);
+  g.fillRect(0, 40, 64, 20);
 
-  // 板を横に並べる
-  const plankH = 64;
-  for (let y = 0; y < 512; y += plankH) {
-    // 板ごとに少し色を変える
-    const shade = 0.93 + Math.random() * 0.12;
-    g.fillStyle = `rgba(${Math.floor(200 * shade)}, ${Math.floor(175 * shade)}, ${Math.floor(140 * shade)}, 0.55)`;
-    g.fillRect(0, y, 512, plankH - 2);
-
-    // 板の継ぎ目
-    g.fillStyle = 'rgba(140, 110, 75, 0.45)';
-    g.fillRect(0, y + plankH - 2, 512, 2);
-
-    // 木目
-    g.strokeStyle = 'rgba(160, 130, 95, 0.20)';
-    g.lineWidth = 1;
-    for (let i = 0; i < 3; i++) {
-      const gy = y + 12 + Math.random() * (plankH - 24);
-      g.beginPath();
-      g.moveTo(0, gy);
-      for (let x = 0; x <= 512; x += 64) {
-        g.lineTo(x, gy + (Math.random() - 0.5) * 4);
-      }
-      g.stroke();
-    }
-  }
-
-  return cv.toDataURL('image/png');
+  return cv.toDataURL();
 }
-/* ===========================================================================
-   【外部コードここまで】
-   =========================================================================== */
+/* 【外部コードここまで】 */
 
 
-/* ===========================================================================
+/* ---------------------------------------------------------------------------
    【自分のコード】
-   シーンの操作、クリック判定、ボールの生成。
-   授業で扱った a-box / a-sphere / a-cylinder、animation コンポーネント、
-   dynamic-body をベースにしている。
-   =========================================================================== */
-
-const scene = document.querySelector('a-scene');
+   --------------------------------------------------------------------------- */
 const ballLayer = document.getElementById('balls');
 const countNum = document.getElementById('countNum');
 const msgEl = document.getElementById('msg');
@@ -196,41 +148,36 @@ const apple = document.getElementById('apple');
 
 let ballCount = 0;
 
-/* ボールを1個落とす */
+// ボールを1個落とす
 function dropBall() {
   const ball = document.createElement('a-sphere');
-  ball.setAttribute('radius', '0.16');
+  ball.setAttribute('radius', '0.11');
   ball.setAttribute('material', 'color: #e8b33c');
-  // 机の真上から落とす。続けて落としたときに玉どうしが重ならないよう、
-  // ボールの番号で横位置をずらす
-  const offsetX = ((ballCount % 5) - 2) * 0.36;
-  ball.setAttribute('position', `${offsetX} 1.75 0`);
-  ball.setAttribute('dynamic-body', 'shape: sphere; sphereRadius: 0.16; mass: 1');
+  // 続けて落としたときに重ならないよう、番号で横位置をずらす。
+  // 机の上の物と重ならないよう、手前側（z=0.42）に落とす
+  ball.setAttribute('position', `${((ballCount % 5) - 2) * 0.42} 1.75 0.42`);
+  ball.setAttribute('dynamic-body', 'shape: sphere; sphereRadius: 0.11; mass: 1');
   ballLayer.appendChild(ball);
 
   ballCount++;
-  countNum.textContent = String(ballCount);
+  countNum.textContent = ballCount;
   msgEl.textContent = 'ボールが落ちてきました。机の上で跳ねて転がります。';
 }
 
-/* りんごを回す */
+// りんごを1回転させる
 function spinApple() {
-  apple.setAttribute('animation', {
-    property: 'rotation',
-    to: '0 360 0',
-    dur: 1000,
-    easing: 'easeInOutQuad'
-  });
+  apple.setAttribute('animation',
+    'property: rotation; to: 0 360 0; dur: 1000; easing: easeInOutQuad');
   msgEl.textContent = 'りんごが1回転しました。';
 
-  // アニメーションが終わったら角度を戻しておく（次のクリックでまた回せるように）
+  // 終わったら角度を戻す（もう一度クリックできるように）
   setTimeout(() => {
     apple.removeAttribute('animation');
     apple.setAttribute('rotation', '0 0 0');
   }, 1050);
 }
 
-/* リセット */
+// リセット
 function resetScene() {
   ballLayer.innerHTML = '';
   ballCount = 0;
@@ -240,46 +187,17 @@ function resetScene() {
   msgEl.textContent = 'りんごをクリックすると回ります。「ボールを落とす」で机の上にボールが落ちてきます。';
 }
 
-/* クリック判定（りんごだけ反応する） */
-const raycaster = new THREE.Raycaster();
-const pointer = new THREE.Vector2();
-
-function onPointerDown(ev) {
-  if (ev.target && ev.target.tagName === 'BUTTON') return;
-
-  pointer.x = (ev.clientX / window.innerWidth) * 2 - 1;
-  pointer.y = -(ev.clientY / window.innerHeight) * 2 + 1;
-
-  if (!scene.camera) return;
-
-  raycaster.setFromCamera(pointer, scene.camera);
-  const hits = raycaster.intersectObject(apple.object3D, true);
-  if (hits.length > 0) {
-    spinApple();
-  }
-}
-
-/* 起動 */
-scene.addEventListener('loaded', () => {
-  // 【外部コード】生成した木目テクスチャを床に貼る
-  const floorEl = document.getElementById('floor');
-  floorEl.setAttribute('material', 'src', makeWoodTexture());
-  // color はテクスチャに掛け算されるので白にしておく
-  floorEl.setAttribute('material', 'color', '#ffffff');
-
+// 起動したらテクスチャを貼って初期化
+document.querySelector('a-scene').addEventListener('loaded', () => {
+  document.getElementById('floor').setAttribute('material', 'src', makeWoodTexture());
   resetScene();
 
-  if (scene.renderer && scene.renderer.domElement) {
-    scene.renderer.domElement.addEventListener('pointerdown', onPointerDown);
-  }
+  // cursor がクリックを拾ったときに呼ばれる
+  apple.addEventListener('click', spinApple);
 });
 
 dropBtn.addEventListener('click', dropBall);
 resetBtn.addEventListener('click', resetScene);
-
-/* ===========================================================================
-   【自分のコードここまで】
-   =========================================================================== */
 </script>
 </body>
 </html>
