@@ -392,7 +392,7 @@ function spawnShard(x, y, z, color, vx, vy, vz) {
   // shape: auto では tetrahedron の当たり判定が作られず床をすり抜けるため、
   // 球の当たり判定を明示的に指定する
   shard.setAttribute('dynamic-body',
-    `shape: sphere; sphereRadius: ${(size * 0.9).toFixed(3)};
+    `shape: sphere; sphereRadius: ${(size * 1.15).toFixed(3)};
      mass: 0.4; linearDamping: 0.02; angularDamping: 0.05`);
 
   scene.appendChild(shard);
@@ -435,7 +435,7 @@ function shatterCrystal(index) {
     spawnShard(
       worldPos.x, worldPos.y, worldPos.z, color,
       Math.cos(ang) * speed,
-      1.4 + Math.random() * 1.8,
+      0.9 + Math.random() * 1.1,
       Math.sin(ang) * speed
     );
   }
@@ -579,6 +579,18 @@ scene.addEventListener('loaded', () => {
 });
 
 resetBtn.addEventListener('click', () => resetScene());
+
+// 小さな破片は高速で落下すると床をすり抜けることがあるため、
+// 一定以下まで落ちたものは取り除く（見た目にも残らないようにする）
+setInterval(() => {
+  for (let i = shards.length - 1; i >= 0; i--) {
+    const s = shards[i];
+    if (!s.object3D || s.object3D.position.y < -1.5) {
+      if (s.parentNode) s.parentNode.removeChild(s);
+      shards.splice(i, 1);
+    }
+  }
+}, 500);
 
 /* ===========================================================================
    【自分のコードここまで】
