@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>魔法の祭壇 - 課題1</title>
+<script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-physics-system@v4.2.2/dist/aframe-physics-system.min.js"></script>
+
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #05060f;
+    font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  #hud {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    z-index: 10;
+    width: 250px;
+    padding: 14px 16px 15px;
+    border-radius: 12px;
+    background: rgba(10, 14, 24, 0.82);
+    border: 1px solid rgba(110, 180, 255, 0.18);
+    color: #dfe9f7;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45);
+  }
+
+  #title {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #7fd8ff;
+    margin-bottom: 10px;
+  }
+
+  #count {
+    font-size: 12.5px;
+    color: #9fb3cc;
+    margin-bottom: 8px;
+  }
+
+  #count b {
+    font-size: 16px;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+  }
+
+  #msg {
+    font-size: 12.5px;
+    line-height: 1.5;
+    min-height: 38px;
+    color: #c8d8ea;
+    margin-bottom: 10px;
+  }
+
+  button {
+    width: 100%;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    color: #eaf4ff;
+    background: rgba(70, 130, 220, 0.55);
+    border: 1px solid rgba(120, 190, 255, 0.35);
+    border-radius: 9px;
+    padding: 10px 0;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.08s;
+  }
+
+  button:hover { background: rgba(90, 155, 245, 0.7); }
+  button:active { transform: scale(0.97); }
+
+  @media (max-width: 520px) {
+    #hud { width: 190px; padding: 10px 12px; top: 10px; left: 10px; }
+    #title { font-size: 13px; }
+    #msg { font-size: 11px; min-height: 34px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <div id="title">魔法の祭壇</div>
+  <div id="count">封印のクリスタル：<b id="countNum">3</b></div>
+  <div id="msg">光るクリスタルをクリックすると砕けます。3つすべて砕くと封印が解けます。</div>
+  <button type="button" id="reset">リセット</button>
+</div>
+
+<a-scene fog="type: exponential; color: #06080f; density: 0.028">
+
+  <!-- 星空（テクスチャは読み込み後に JS で貼る） -->
+  <a-sky id="sky" color="#070a16"></a-sky>
+
+  <!-- 床：当たり判定を持つ静的な箱 -->
+  <a-box id="floor" width="16" height="0.6" depth="16" position="0 -0.3 0"
+         material="color: #171d2b; roughness: 0.95" static-body></a-box>
+
+  <!-- 魔方陣：床の少し上に重ねる -->
+  <a-plane id="circle" rotation="-90 0 0" position="0 0.012 0" width="7" height="7"
+           material="transparent: true; opacity: 0.95; blending: additive; depthWrite: false"
+           animation__pulse="property: scale; from: 1 1 1; to: 1.03 1.03 1.03;
+                             dir: alternate; loop: true; dur: 2600; easing: easeInOutSine"></a-plane>
+
+  <!-- 祭壇（2段の石の台座） -->
+  <a-cylinder id="altar1" position="0 0.14 0" radius="1.32" height="0.28" segments="40"
+              material="color: #2b3448; roughness: 0.9" static-body></a-cylinder>
+  <a-cylinder id="altar2" position="0 0.39 0" radius="0.96" height="0.22" segments="40"
+              material="color: #39445c; roughness: 0.85" static-body></a-cylinder>
+
+  <!-- クリスタル（JS で生成） -->
+  <a-entity id="crystals"></a-entity>
+
+  <!-- 封印の核（最初は見えない。全クリスタルを砕くと現れる） -->
+  <a-entity id="core" position="0 0.55 0" scale="0.001 0.001 0.001" visible="false">
+    <a-octahedron radius="0.3" scale="0.85 1.5 0.85"
+                  material="color: #9fe4ff; emissive: #4fb8ff; emissiveIntensity: 0.9;
+                            metalness: 0.4; roughness: 0.15"></a-octahedron>
+    <a-entity light="type: point; color: #7fd0ff; intensity: 0; distance: 8"></a-entity>
+  </a-entity>
+
+  <!-- 環境光 -->
+  <a-entity light="type: ambient; color: #7a8db0; intensity: 0.85"></a-entity>
+  <a-entity light="type: directional; color: #c8dcff; intensity: 0.55; position: 4 9 6"></a-entity>
+  <a-entity light="type: point; color: #5fb8ff; intensity: 1.6; distance: 18; position: 0 2.6 0"></a-entity>
+  <a-entity light="type: point; color: #a06bff; intensity: 1.1; distance: 14; position: -3.5 1.6 3"></a-entity>
+
+  <a-entity camera position="0 2.35 5.4" rotation="-21 0 0"></a-entity>
+
+</a-scene>
+
+<script>
+/* ===========================================================================
+   【外部コード】テクスチャを Canvas 2D で生成している部分
+   授業では画像ファイルを読み込む方法しか扱っていないため、
+   描画処理（ノイズの重ね方、グロー表現など）は AI のサポートで実装した。
+   細部のパラメータの意味までは理解しきれていない部分がある。
+   =========================================================================== */
+
+// 石のテクスチャ（床・祭壇用）
+function makeStoneTexture(size) {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = size;
+  const g = cv.getContext('2d');
+
+  const base = g.createLinearGradient(0, 0, size, size);
+  base.addColorStop(0, '#454f68');
+  base.addColorStop(0.5, '#333c52');
+  base.addColorStop(1, '#242b3a');
+  g.fillStyle = base;
+  g.fillRect(0, 0, size, size);
+
+  // 細かい粒状のノイズ
+  for (let i = 0; i < size * 18; i++) {
+    const x = Math.random() * size;
+    const y = Math.random() * size;
+    const bright = Math.random();
+    const alpha = 0.03 + Math.random() * 0.07;
+    g.fillStyle = bright > 0.5
+      ? `rgba(190, 210, 245, ${alpha})`
+      : `rgba(8, 12, 20, ${alpha * 1.6})`;
+    g.fillRect(x, y, 1.5, 1.5);
+  }
+
+  // ひび割れのような線
+  g.lineWidth = 1;
+  for (let i = 0; i < 22; i++) {
+    g.strokeStyle = `rgba(130, 165, 215, ${0.05 + Math.random() * 0.07})`;
+    g.beginPath();
+    let x = Math.random() * size;
+    let y = Math.random() * size;
+    g.moveTo(x, y);
+    const steps = 3 + Math.floor(Math.random() * 4);
+    for (let s = 0; s < steps; s++) {
+      x += (Math.random() - 0.5) * size * 0.22;
+      y += (Math.random() - 0.5) * size * 0.22;
+      g.lineTo(x, y);
+    }
+    g.stroke();
+  }
+
+  return cv.toDataURL('image/png');
+}
+
+// 魔方陣のテクスチャ（透明背景に発光する線を描く）
+function makeMagicCircleTexture(size) {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = size;
+  const g = cv.getContext('2d');
+  const c = size / 2;
+
+  g.clearRect(0, 0, size, size);
+  g.globalCompositeOperation = 'lighter';
+
+  // 外周から中心へ向かう淡いグロー
+  const glow = g.createRadialGradient(c, c, size * 0.05, c, c, size * 0.5);
+  glow.addColorStop(0, 'rgba(90, 190, 255, 0.30)');
+  glow.addColorStop(0.55, 'rgba(60, 120, 230, 0.10)');
+  glow.addColorStop(1, 'rgba(20, 40, 90, 0)');
+  g.fillStyle = glow;
+  g.fillRect(0, 0, size, size);
+
+  // 同心円
+  const rings = [
+    { r: 0.47, w: 0.006, a: 0.85 },
+    { r: 0.44, w: 0.002, a: 0.55 },
+    { r: 0.34, w: 0.005, a: 0.80 },
+    { r: 0.31, w: 0.002, a: 0.50 },
+    { r: 0.17, w: 0.004, a: 0.75 },
+    { r: 0.13, w: 0.002, a: 0.45 }
+  ];
+  rings.forEach((ring) => {
+    g.beginPath();
+    g.arc(c, c, size * ring.r, 0, Math.PI * 2);
+    g.lineWidth = size * ring.w;
+    g.strokeStyle = `rgba(120, 210, 255, ${ring.a})`;
+    g.stroke();
+  });
+
+  // 二重の六角形
+  [0.40, 0.36].forEach((rr, idx) => {
+    g.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const ang = (Math.PI / 3) * i - Math.PI / 2 + (idx ? Math.PI / 6 : 0);
+      const x = c + Math.cos(ang) * size * rr;
+      const y = c + Math.sin(ang) * size * rr;
+      if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+    }
+    g.closePath();
+    g.lineWidth = size * (idx ? 0.0025 : 0.005);
+    g.strokeStyle = `rgba(150, 225, 255, ${idx ? 0.55 : 0.85})`;
+    g.stroke();
+  });
+
+  // 中心から外へ伸びる放射線
+  for (let i = 0; i < 24; i++) {
+    const ang = (Math.PI * 2 / 24) * i;
+    const inner = size * 0.17;
+    const outer = i % 2 === 0 ? size * 0.31 : size * 0.27;
+    g.beginPath();
+    g.moveTo(c + Math.cos(ang) * inner, c + Math.sin(ang) * inner);
+    g.lineTo(c + Math.cos(ang) * outer, c + Math.sin(ang) * outer);
+    g.lineWidth = size * (i % 2 === 0 ? 0.0035 : 0.002);
+    g.strokeStyle = `rgba(110, 200, 255, ${i % 2 === 0 ? 0.75 : 0.45})`;
+    g.stroke();
+  }
+
+  // 内側の三角形（魔法陣らしさを出す）
+  g.beginPath();
+  for (let i = 0; i < 3; i++) {
+    const ang = (Math.PI * 2 / 3) * i - Math.PI / 2;
+    const x = c + Math.cos(ang) * size * 0.17;
+    const y = c + Math.sin(ang) * size * 0.17;
+    if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+  }
+  g.closePath();
+  g.lineWidth = size * 0.0025;
+  g.strokeStyle = 'rgba(180, 235, 255, 0.7)';
+  g.stroke();
+
+  // 外周の目盛り（ルーン風の短い線）
+  for (let i = 0; i < 48; i++) {
+    const ang = (Math.PI * 2 / 48) * i;
+    g.beginPath();
+    g.moveTo(c + Math.cos(ang) * size * 0.44, c + Math.sin(ang) * size * 0.44);
+    g.lineTo(c + Math.cos(ang) * size * 0.47, c + Math.sin(ang) * size * 0.47);
+    g.lineWidth = size * 0.0022;
+    g.strokeStyle = 'rgba(140, 215, 255, 0.55)';
+    g.stroke();
+  }
+
+  return cv.toDataURL('image/png');
+}
+
+// 星空のテクスチャ（天球用）
+function makeStarfieldTexture(w, h) {
+  const cv = document.createElement('canvas');
+  cv.width = w;
+  cv.height = h;
+  const g = cv.getContext('2d');
+
+  const bg = g.createLinearGradient(0, 0, 0, h);
+  bg.addColorStop(0, '#050813');
+  bg.addColorStop(0.55, '#0a1024');
+  bg.addColorStop(1, '#05070f');
+  g.fillStyle = bg;
+  g.fillRect(0, 0, w, h);
+
+  // 星
+  for (let i = 0; i < 1400; i++) {
+    const x = Math.random() * w;
+    const y = Math.random() * h;
+    const r = Math.random() * 1.4 + 0.33;
+    const a = 0.25 + Math.random() * 0.75;
+    g.fillStyle = `rgba(${200 + Math.random() * 55}, ${220 + Math.random() * 35}, 255, ${a})`;
+    g.beginPath();
+    g.arc(x, y, r, 0, Math.PI * 2);
+    g.fill();
+  }
+
+  // 星雲のような淡い光
+  for (let i = 0; i < 7; i++) {
+    const x = Math.random() * w;
+    const y = h * 0.2 + Math.random() * h * 0.6;
+    const rad = 120 + Math.random() * 220;
+    const neb = g.createRadialGradient(x, y, 0, x, y, rad);
+    const hue = Math.random() > 0.5 ? '80, 130, 255' : '140, 90, 220';
+    neb.addColorStop(0, `rgba(${hue}, 0.10)`);
+    neb.addColorStop(1, `rgba(${hue}, 0)`);
+    g.fillStyle = neb;
+    g.beginPath();
+    g.arc(x, y, rad, 0, Math.PI * 2);
+    g.fill();
+  }
+
+  return cv.toDataURL('image/png');
+}
+
+/* ===========================================================================
+   【自分のコードここから】
+   シーンの構成、アニメーション、クリック処理、HUD の更新。
+   授業で扱った a-box / a-cylinder / a-plane / a-octahedron、
+   animation コンポーネント、dynamic-body / static-body をベースにしている。
+   =========================================================================== */
+
+const scene = document.querySelector('a-scene');
+const crystalLayer = document.getElementById('crystals');
+const coreEl = document.getElementById('core');
+const countNum = document.getElementById('countNum');
+const msgEl = document.getElementById('msg');
+const resetBtn = document.getElementById('reset');
+
+// クリスタルの配置と色（3つを三角形に並べる）
+const CRYSTAL_DEFS = [
+  { pos: '-0.70 0.98 0.12', color: '#63e2ff', emissive: '#1ea8e0' },
+  { pos: '0.72 1.04 0.16', color: '#c08bff', emissive: '#7a3fd8' },
+  { pos: '0.02 1.16 -0.50', color: '#ffd06a', emissive: '#d69b1f' }
+];
+
+let crystals = [];      // { el, broken }
+let shards = [];        // 生成した破片
+let sealed = true;      // 封印が解かれていないか
+
+/* --- クリスタルを1つ作る --- */
+function buildCrystal(def, index) {
+  const el = document.createElement('a-entity');
+  el.setAttribute('class', 'crystal');
+  el.setAttribute('data-index', index);
+  el.setAttribute('position', def.pos);
+
+  el.innerHTML = `
+    <a-octahedron radius="0.22" scale="0.8 1.45 0.8"
+                  material="color: ${def.color}; emissive: ${def.emissive};
+                            emissiveIntensity: 1.05; metalness: 0.35; roughness: 0.15">
+    </a-octahedron>
+    <a-entity class="hit" geometry="primitive: sphere; radius: 0.36"
+              material="opacity: 0; transparent: true"></a-entity>
+  `;
+
+  // 回転（授業で扱った animation コンポーネント）
+  el.setAttribute('animation__spin',
+    'property: rotation; to: 0 360 0; loop: true; dur: 6000; easing: linear');
+
+  // 上下の浮遊。to は絶対座標なので、配置ごとに計算する
+  const baseY = parseFloat(def.pos.split(' ')[1]);
+  el.setAttribute('animation__float',
+    `property: position; to: ${def.pos.split(' ')[0]} ${(baseY + 0.13).toFixed(2)} ${def.pos.split(' ')[2]};
+     dir: alternate; loop: true; dur: 2200; easing: easeInOutSine`);
+
+  return el;
+}
+
+/* --- 破片を1つ作る（物理つき） --- */
+function spawnShard(x, y, z, color, vx, vy, vz) {
+  const shard = document.createElement('a-entity');
+  const size = 0.04 + Math.random() * 0.05;
+  shard.setAttribute('class', 'shard');
+  shard.setAttribute('geometry',
+    `primitive: tetrahedron; radius: ${size.toFixed(3)}`);
+  shard.setAttribute('material',
+    `color: ${color}; emissive: ${color}; emissiveIntensity: 0.5;
+     metalness: 0.3; roughness: 0.25`);
+  shard.setAttribute('position', `${x} ${y} ${z}`);
+  // shape: auto では tetrahedron の当たり判定が作られず床をすり抜けるため、
+  // 球の当たり判定を明示的に指定する
+  shard.setAttribute('dynamic-body',
+    `shape: sphere; sphereRadius: ${(size * 0.9).toFixed(3)};
+     mass: 0.4; linearDamping: 0.02; angularDamping: 0.05`);
+
+  scene.appendChild(shard);
+
+  // body が用意されるのを待ってから初速を与える
+  shard.addEventListener('body-loaded', () => {
+    if (!shard.body) return;
+    shard.body.velocity.set(vx, vy, vz);
+    shard.body.angularVelocity.set(
+      (Math.random() - 0.5) * 12,
+      (Math.random() - 0.5) * 12,
+      (Math.random() - 0.5) * 12
+    );
+  });
+
+  shards.push(shard);
+  return shard;
+}
+
+/* --- クリスタルを砕く --- */
+function shatterCrystal(index) {
+  const target = crystals[index];
+  if (!target || target.broken || !sealed) return;
+
+  const el = target.el;
+  const worldPos = new THREE.Vector3();
+  el.object3D.getWorldPosition(worldPos);
+
+  const color = CRYSTAL_DEFS[index].color;
+
+  // 元のクリスタルを消す
+  el.setAttribute('visible', false);
+  target.broken = true;
+
+  // 破片を飛ばす
+  const NUM = 16;
+  for (let i = 0; i < NUM; i++) {
+    const ang = (Math.PI * 2 / NUM) * i + Math.random() * 0.4;
+    const speed = 1.1 + Math.random() * 1.5;
+    spawnShard(
+      worldPos.x, worldPos.y, worldPos.z, color,
+      Math.cos(ang) * speed,
+      1.4 + Math.random() * 1.8,
+      Math.sin(ang) * speed
+    );
+  }
+
+  updateHUD();
+
+  const remain = crystals.filter((c) => !c.broken).length;
+  if (remain === 0) {
+    releaseSeal();
+  } else {
+    msgEl.textContent = `クリスタルが砕けました。残り ${remain} 個。`;
+  }
+}
+
+/* --- 3つすべて砕いたときの演出 --- */
+function releaseSeal() {
+  sealed = false;
+  msgEl.textContent = '封印が解けました。祭壇の核が姿を現します。';
+
+  coreEl.setAttribute('visible', true);
+
+  // 拡大しながら浮上
+  let t = 0;
+  const dur = 1600;
+  const start = performance.now();
+
+  (function rise(now) {
+    t = Math.min((now - start) / dur, 1);
+    const e = 1 - Math.pow(1 - t, 3);          // easeOutCubic
+    const s = 0.001 + e * 0.999;
+    const y = 0.55 + e * 1.05;
+    coreEl.setAttribute('scale', `${s} ${s} ${s}`);
+    coreEl.setAttribute('position', `0 ${y} 0`);
+    if (t < 1) requestAnimationFrame(rise);
+  })(performance.now());
+
+  // 光を強める
+  const lightEl = coreEl.querySelector('[light]');
+  if (lightEl) lightEl.setAttribute('light', 'intensity', 2.2);
+
+  // ゆっくり回転させる
+  coreEl.setAttribute('animation__spin',
+    'property: rotation; to: 0 360 0; loop: true; dur: 9000; easing: linear');
+
+  // 魔方陣を明るくする
+  const circleEl = document.getElementById('circle');
+  circleEl.setAttribute('material', 'opacity', 1.0);
+}
+
+/* --- HUD 更新 --- */
+function updateHUD() {
+  const remain = crystals.filter((c) => !c.broken).length;
+  countNum.textContent = String(remain);
+}
+
+/* --- リセット --- */
+function resetScene() {
+  // 破片を片付ける
+  shards.forEach((s) => {
+    if (s.parentNode) s.parentNode.removeChild(s);
+  });
+  shards = [];
+
+  // 核を初期状態へ
+  coreEl.removeAttribute('animation__spin');
+  coreEl.setAttribute('visible', false);
+  coreEl.setAttribute('scale', '0.001 0.001 0.001');
+  coreEl.setAttribute('position', '0 0.55 0');
+  coreEl.setAttribute('rotation', '0 0 0');
+  const lightEl = coreEl.querySelector('[light]');
+  if (lightEl) lightEl.setAttribute('light', 'intensity', 0);
+
+  // クリスタルを作り直す
+  crystalLayer.innerHTML = '';
+  crystals = CRYSTAL_DEFS.map((def, i) => {
+    const el = buildCrystal(def, i);
+    crystalLayer.appendChild(el);
+    return { el, broken: false };
+  });
+
+  sealed = true;
+  updateHUD();
+  msgEl.textContent = '光るクリスタルをクリックすると砕けます。3つすべて砕くと封印が解けます。';
+
+  const circleEl = document.getElementById('circle');
+  circleEl.setAttribute('material', 'opacity', 0.95);
+}
+
+/* --- クリック判定（レイキャスト） --- */
+const raycaster = new THREE.Raycaster();
+const pointerNdc = new THREE.Vector2();
+
+function onPointerDown(ev) {
+  if (ev.target && ev.target.tagName === 'BUTTON') return;
+
+  pointerNdc.x = (ev.clientX / window.innerWidth) * 2 - 1;
+  pointerNdc.y = -(ev.clientY / window.innerHeight) * 2 + 1;
+
+  if (!scene.camera) return;
+
+  const targets = crystals
+    .filter((c) => !c.broken)
+    .map((c) => c.el.querySelector('.hit').object3D);
+
+  if (!targets.length) return;
+
+  raycaster.setFromCamera(pointerNdc, scene.camera);
+  const hits = raycaster.intersectObjects(targets, true);
+  if (!hits.length) return;
+
+  const crystalEl = hits[0].object.el.closest('.crystal');
+  if (!crystalEl) return;
+
+  shatterCrystal(Number(crystalEl.dataset.index));
+}
+
+/* --- 起動処理 --- */
+scene.addEventListener('loaded', () => {
+  /* 【外部コード】テクスチャの適用（Canvas 2D で生成したものを貼る） */
+  const sky = document.getElementById('sky');
+  sky.setAttribute('src', makeStarfieldTexture(2048, 1024));
+
+  const circle = document.getElementById('circle');
+  circle.setAttribute('material', 'src', makeMagicCircleTexture(1024));
+
+  const stone = makeStoneTexture(512);
+  ['floor', 'altar1', 'altar2'].forEach((id) => {
+    const el = document.getElementById(id);
+    el.setAttribute('material', 'src', stone);
+    // テクスチャの色をそのまま出したいので、色は白にしておく
+    // （color はテクスチャに掛け算されるため、暗い色だと真っ黒になる）
+    el.setAttribute('material', 'color', '#ffffff');
+  });
+  /* 【外部コードここまで】 */
+
+  resetScene();
+
+  if (scene.renderer && scene.renderer.domElement) {
+    scene.renderer.domElement.addEventListener('pointerdown', onPointerDown);
+  }
+});
+
+resetBtn.addEventListener('click', () => resetScene());
+
+/* ===========================================================================
+   【自分のコードここまで】
+   =========================================================================== */
+</script>
+</body>
+</html>
